@@ -1,0 +1,394 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dscKeySecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Automation Account Key for PowerShell DSC Configuration"
+            }
+        },
+        "dscKeyUrl": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Automation Account Url for PowerShell DSC Configuration"
+            }
+        },
+        "dscNodeConfiguration": {
+            "type": "string",
+            "metadata": {
+                "description": "PowerShell DSC Node Configuration"
+            }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for the Key Vault containing the Certificate required to install on the Virtual Machines"
+            },
+            "defaultValue": ""
+        },
+        "keyVaultRg": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Resource Group"
+            },
+            "defaultValue": ""
+        },
+        "keyVaultCertUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Url for Certificate in the Key Vault"
+            },
+            "defaultValue": ""
+        },
+        "vmAdminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The password for the Admin Account. Must be at least 12 characters long"
+            },
+            "minLength": 12
+        },
+        "vmAdminUser": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Administrator Account to be created"
+            }
+        },
+        "vmCount": {
+            "type": "int",
+            "metadata": {
+                "description": "How many Virtual Machine do you want to deploy?"
+            },
+            "allowedValues": [ 2, 4, 6, 8 ]
+        },
+        "vmSize": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifiy the size of VM required for the VM(s)"
+            },
+            "defaultValue": "Standard_D4_v3"
+        },
+        "_artifactsLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
+            }
+        },
+        "_artifactsLocationSasToken": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Auto-generated token to access _artifactsLocation"
+            }
+        }
+    },
+    "variables": {
+        "ids": {
+            "avs": "[resourceId('Microsoft.Compute/availabilitySets', variables('names').avs)]",
+            "lb": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers', variables('names').lb.name)]",
+                "backEnd": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('names').lb.name), '/backendAddressPools/', variables('names').lb.backEnd)]",
+                "frontEnd": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('names').lb.name), '/frontEndIpConfigurations/', variables('names').lb.frontEnd)]",
+                "probe": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('names').lb.name), '/probes/', variables('names').lb.probe)]"
+            },
+            "kv": "[if(parameters('keyVaultName'), concat(resourceId(parameters('keyVaultRg'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))), json('null'))]",
+            "pip": "[resourceId('Microsoft.Network/publicIPAddresses', variables('names').pip)]",
+            "subnet": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('names').vnet.name),'/subnets/', variables('names').vnet.subnet)]"
+        },
+        "names": {
+            "avs": "[concat('avs-wac-', uniqueString(resourceGroup().id))]",
+            "lb": {
+                "name": "[concat('lbe-wac-', uniqueString(resourceGroup().id))]",
+                "backEnd": "lb-backEnd-https",
+                "frontEnd": "lb-frontEnd",
+                "probe": "https-probe",
+                "rule": "lb-rule-https"
+            },
+            "nic": "[concat('nic-wac-', uniqueString(resourceGroup().id), '-')]",
+            "pip": "[concat('pip-wac-', uniqueString(resourceGroup().id))]",
+            "vm": "[concat('vm-wac-', uniqueString(resourceGroup().id), '-')]",
+            "vnet": {
+                "name": "[concat('vn-wac-', uniqueString(resourceGroup().id))]",
+                "addressPrefix": "10.0.0.0/16",
+                "subnet": "subnet-0",
+                "subnetPrefix": "10.0.0.0/24"
+            }
+        },
+        "secrets": [
+            {
+                "sourceVault": {
+                    "id": "[variables('ids').kv]"
+                },
+                "vaultCertificates": [
+                    {
+                        "certificateUrl": "[parameters('keyVaultCertUrl')]",
+                        "certificateStore": "My"
+                    }
+                ]
+            }
+        ]
+    },
+    "resources": [
+        {
+            "name": "[variables('names').avs]",
+            "type": "Microsoft.Compute/availabilitySets",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-12-01",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "availabilitySets"
+            },
+            "properties": {
+                "platformUpdateDomainCount": 5,
+                "platformFaultDomainCount": 2
+            },
+            "sku": {
+                "name": "Aligned"
+            }
+        },
+        {
+            "name": "[variables('names').pip]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-10-01",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "publicIP"
+            },
+            "properties": {
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('names').pip]"
+                },
+                "idleTimeoutInMinutes": 4,
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Dynamic"
+            }
+        },
+        {
+            "name": "[variables('names').vnet.name]",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-10-01",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "virtualNetwork"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('names').vnet.addressPrefix]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('names').vnet.subnet]",
+                        "properties": {
+                            "addressPrefix": "[variables('names').vnet.subnetPrefix]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('names').lb.name]",
+            "type": "Microsoft.Network/loadBalancers",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2018-01-01",
+            "dependsOn": [
+                "[variables('names').pip]"
+            ],
+            "tags": {
+                "displayName": "loadBalancer"
+            },
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "[variables('names').lb.frontEnd]",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[variables('ids').pip]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "[variables('names').lb.backEnd]"
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "[variables('names').lb.rule]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('ids').lb.frontEnd]"
+                            },
+                            "frontendPort": 443,
+                            "backendPort": 443,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 5,
+                            "protocol": "Tcp",
+                            "loadDistribution": "SourceIPProtocol",
+                            "backendAddressPool": {
+                                "id": "[variables('ids').lb.backEnd]"
+                            },
+                            "probe": {
+                                "id": "[variables('ids').lb.probe]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "[variables('names').lb.probe]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 443,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ],
+                "inboundNatRules": [],
+                "outboundNatRules": [],
+                "inboundNatPools": []
+            }
+        },
+        {
+            "name": "[concat(variables('names').nic, copyIndex())]",
+            "copy": {
+                "name": "nicLoop",
+                "count": "[parameters('vmCount')]"
+            },
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-10-01",
+            "dependsOn": [
+                "[variables('ids').lb.id]"
+            ],
+            "tags": {
+                "displayName": "networkInterfaces"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[variables('ids').lb.backEnd]"
+                                }
+                            ],
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('ids').subnet]"
+                            }
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": []
+                },
+                "enableIPForwarding": false                
+            }
+        },
+        {
+            "name": "[concat(variables('names').vm, copyIndex())]",
+            "copy": {
+                "name": "vmLoop",
+                "count": "[parameters('vmCount')]"
+            },
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-12-01",
+            "dependsOn": [
+                "[variables('names').avs]",
+                "nicLoop"
+            ],
+            "tags": {
+                "displayName": "virtualMachines"
+            },
+            "properties": {
+                "availabilitySet": {
+                    "id": "[variables('ids').avs]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[concat(variables('names').vm, copyIndex())]",
+                    "adminUsername": "[parameters('vmAdminUser')]",
+                    "adminPassword": "[parameters('vmAdminPassword')]",
+                    "secrets": "[if(parameters('keyVaultName'), variables('secrets'), json('[]'))]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": true
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "2016-Datacenter",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS"
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('names').nic, copyIndex()))]"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2017-12-01",
+                    "type": "extensions",
+                    "name": "dsc-lcm-aa",
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [],
+                    "properties": {
+                        "publisher": "Microsoft.Powershell",
+                        "type": "DSC",
+                        "typeHandlerVersion": "2.22",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "configuration": {
+                                "url": "[concat(parameters('_artifactsLocation'), '/dsc-scripts/lcm-aa-pull.zip')]",
+                                "script": "lcm-aa-pull.ps1",
+                                "function": "ConfigureLCMforAAPull"
+                            },
+                            "configurationArguments": {
+                                "nodeConfigurationName": "[parameters('dscNodeConfiguration')]",
+                                "configurationMode": "ApplyAndMonitor",
+                                "configurationModeFrequencyMins": 15,
+                                "refreshFrequencyMins": 30,
+                                "rebootNodeIfNeeded": true,
+                                "actionAfterReboot": "ContinueConfiguration",
+                                "allowModuleOverwrite": false
+                            }
+                        },
+                        "protectedSettings": {
+                            "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+                            "configurationArguments": {
+                                "registrationKey": {
+                                    "username": "dscKeyPri",
+                                    "password": "[parameters('dscKeySecret')]"
+                                },
+                                "registrationUrl": "[parameters('dscKeyUrl')]"
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {}
+}
