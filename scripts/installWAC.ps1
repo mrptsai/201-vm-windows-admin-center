@@ -35,7 +35,7 @@ installHonolulu `
 	-ProductCode "{21CF99D0-E1EE-4883-BC0E-DBFF7A092685}"
 #>
 
-Configuration installHonolulu
+Configuration installWAC
 {
 	param
     (

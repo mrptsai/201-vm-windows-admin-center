@@ -18,7 +18,8 @@
             "type": "string",
             "metadata": {
                 "description": "PowerShell DSC Node Configuration"
-            }
+            },
+            "defaultValue": "InstallWAC"
         },
         "keyVaultName": {
             "type": "string",
@@ -59,7 +60,8 @@
             "metadata": {
                 "description": "How many Virtual Machine do you want to deploy?"
             },
-            "allowedValues": [ 2, 4, 6, 8 ]
+            "allowedValues": [ 2, 4, 6, 8 ],
+            "defaultValue": 2
         },
         "vmSize": {
             "type": "string",
