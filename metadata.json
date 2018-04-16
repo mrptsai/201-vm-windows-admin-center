@@ -1,7 +1,7 @@
 {
-    "itemDisplayName": "Install Windows Admin Center with Certificate",
-    "description": "This template builds Virtual Machines and supporting Resources with Windows Admin Center installed. It also installs and configures upto 4 VSTS build agents and links them to a VSTS Pool",
-    "summary": "Visual Studio 2017 Build Agent(s) Server",
+    "itemDisplayName": "Install Windows Admin Center with a custom or self-signed certificate",
+    "description": "This template builds Virtual Machine(s) and supporting Resources with Windows Admin Center installed. It also installs and configures either a custom certificate stored in a Key Vault or a self-signed certificate.",
+    "summary": "Windows Admin Center Servers with certifcate",
     "githubUsername": "mrptsai",
     "dateUpdated": "2018-04-16"
 }
