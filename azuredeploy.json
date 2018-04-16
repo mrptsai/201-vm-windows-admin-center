@@ -94,7 +94,7 @@
                 "frontEnd": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('names').lb.name), '/frontEndIpConfigurations/', variables('names').lb.frontEnd)]",
                 "probe": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('names').lb.name), '/probes/', variables('names').lb.probe)]"
             },
-            "kv": "[if(equals(parameters('keyVaultName'), json('')), json('null'), concat(resourceId(parameters('keyVaultRg'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))))]",
+            "kv": "[if(empty(parameters('keyVaultName')), json('null'), concat(resourceId(parameters('keyVaultRg'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))))]",
             "pip": "[resourceId('Microsoft.Network/publicIPAddresses', variables('names').pip)]",
             "subnet": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('names').vnet.name),'/subnets/', variables('names').vnet.subnet)]"
         },
@@ -357,7 +357,9 @@
                     "type": "extensions",
                     "name": "dsc-lcm-aa",
                     "location": "[resourceGroup().location]",
-                    "dependsOn": [],
+                    "dependsOn": [
+                        "vmLoop"
+                    ],
                     "properties": {
                         "publisher": "Microsoft.Powershell",
                         "type": "DSC",
