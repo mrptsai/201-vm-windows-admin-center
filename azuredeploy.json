@@ -19,7 +19,7 @@
             "metadata": {
                 "description": "PowerShell DSC Node Configuration"
             },
-            "defaultValue": "InstallWAC"
+            "defaultValue": "installWAC.localhost"
         },
         "keyVaultName": {
             "type": "string",
@@ -75,7 +75,7 @@
             "metadata": {
                 "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
             },
-            "defaultValue": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/201-vm-windows-admin-center"
+            "defaultValue": "https://raw.githubusercontent.com/mrptsai/201-vm-windows-admin-center/master"
         },
         "_artifactsLocationSasToken": {
             "type": "securestring",
@@ -86,6 +86,7 @@
         }
     },
     "variables": {
+        "prefix": "[substring(uniqueString('resourceGroup().id'), 0, 6)]",
         "ids": {
             "avs": "[resourceId('Microsoft.Compute/availabilitySets', variables('names').avs)]",
             "lb": {
@@ -99,19 +100,19 @@
             "subnet": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('names').vnet.name),'/subnets/', variables('names').vnet.subnet)]"
         },
         "names": {
-            "avs": "[concat('avs-wac-', uniqueString(resourceGroup().id))]",
+            "avs": "[concat('avs-wac-', variables('prefix'))]",
             "lb": {
-                "name": "[concat('lbe-wac-', uniqueString(resourceGroup().id))]",
+                "name": "[concat('lbe-wac-', variables('prefix'))]",
                 "backEnd": "lb-backEnd-https",
                 "frontEnd": "lb-frontEnd",
                 "probe": "https-probe",
                 "rule": "lb-rule-https"
             },
-            "nic": "[concat('nic-wac-', uniqueString(resourceGroup().id), '-')]",
-            "pip": "[concat('pip-wac-', uniqueString(resourceGroup().id))]",
-            "vm": "[concat('vm-wac-', uniqueString(resourceGroup().id), '-')]",
+            "nic": "[concat('nic-wac-', variables('prefix'), '-')]",
+            "pip": "[concat('pip-wac-', variables('prefix'))]",
+            "vm": "[concat('vm-wac-', variables('prefix'), '-')]",
             "vnet": {
-                "name": "[concat('vn-wac-', uniqueString(resourceGroup().id))]",
+                "name": "[concat('vn-wac-', variables('prefix'))]",
                 "addressPrefix": "10.0.0.0/16",
                 "subnet": "subnet-0",
                 "subnetPrefix": "10.0.0.0/24"
@@ -323,7 +324,7 @@
                     "computerName": "[concat(variables('names').vm, copyIndex())]",
                     "adminUsername": "[parameters('vmAdminUser')]",
                     "adminPassword": "[parameters('vmAdminPassword')]",
-                    "secrets": "[if(parameters('keyVaultName'), variables('secrets'), json('[]'))]",
+                    "secrets": "[if(empty(parameters('keyVaultName')), json('[]'), variables('secrets'))]",
                     "windowsConfiguration": {
                         "provisionVMAgent": true,
                         "enableAutomaticUpdates": true
@@ -358,7 +359,7 @@
                     "name": "dsc-lcm-aa",
                     "location": "[resourceGroup().location]",
                     "dependsOn": [
-                        "vmLoop"
+                        "[concat(variables('names').vm, copyIndex())]"
                     ],
                     "properties": {
                         "publisher": "Microsoft.Powershell",
@@ -367,7 +368,7 @@
                         "autoUpgradeMinorVersion": true,
                         "settings": {
                             "configuration": {
-                                "url": "[concat(parameters('_artifactsLocation'), '/dsc-scripts/lcm-aa-pull.zip')]",
+                                "url": "[concat(parameters('_artifactsLocation'), '/scripts/lcm-aa-pull.zip')]",
                                 "script": "lcm-aa-pull.ps1",
                                 "function": "ConfigureLCMforAAPull"
                             },

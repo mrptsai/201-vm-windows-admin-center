@@ -102,7 +102,7 @@ Configuration installWAC
 				Test-Path "C:\apps\WindowsAdminCenter.msi"
 			}			
 			SetScript = {
-	            Invoke-WebRequest -Uri $using:Uri -OutFile "C:\wac\WindowsAdminCenter.msi"
+	            Invoke-WebRequest -Uri $using:Uri -OutFile "C:\apps\WindowsAdminCenter.msi"
 			}			
 			GetScript = {@{Result = "DownloadWAC"}}
 			DependsOn = "[File]WindowsAdminCenter"			
